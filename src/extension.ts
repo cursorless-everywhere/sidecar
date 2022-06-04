@@ -8,6 +8,7 @@ export function activate(context: vscode.ExtensionContext) {
     const fs = require("fs");
     const os = require("os");
 
+    // TODO(pcohen): make this generic across editors
     // TODO(pcohen): diff the state against the previous state
     let state = JSON.parse(
       fs.readFileSync(os.homedir() + "/.jb-state/latest.json")
@@ -27,6 +28,7 @@ export function activate(context: vscode.ExtensionContext) {
       );
 
       // Close the other tabs that might have been opened.
+      // TODO(pcohen): this seems to always leave one additional tab open.
       commands.executeCommand("workbench.action.closeOtherEditors");
     }
 
