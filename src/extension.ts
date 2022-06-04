@@ -25,6 +25,9 @@ export function activate(context: vscode.ExtensionContext) {
         "vscode.open",
         Uri.file(state["activeEditor"]["path"])
       );
+
+      // Close the other tabs that might have been opened.
+      commands.executeCommand("workbench.action.closeOtherEditors");
     }
 
     commands.executeCommand("revealLine", {
@@ -43,9 +46,6 @@ export function activate(context: vscode.ExtensionContext) {
           )
       );
     }
-
-    // Close the other tabs that might have been opened.
-    commands.executeCommand("workbench.action.closeOtherEditors");
   }
 
   const watcher = vscode.workspace.createFileSystemWatcher(
