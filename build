@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+set -e
+
+# Remove any previously compiled versions.
+rm *.vsix || true
+
+# Bump the version to ensure that it gets upgraded.
+npm version patch --force --commit-hooks false --git-tag-version false
+
+yes | vsce package
+
+# Install the compiled extension.
+code --install-extension *.vsix
+echo "Done"
