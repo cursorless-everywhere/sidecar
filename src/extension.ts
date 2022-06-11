@@ -4,14 +4,14 @@ import { commands, Uri } from "vscode";
 export function activate(context: vscode.ExtensionContext) {
   // vscode.window.showInformationMessage("Sidecar Loaded!");
 
-  function applyJetBrainsState() {
+  async function applyJetBrainsState() {
     const fs = require("fs");
     const os = require("os");
 
     // TODO(pcohen): make this generic across editors
     // TODO(pcohen): diff the state against the previous state
     let state = JSON.parse(
-      fs.readFileSync(os.homedir() + "/.jb-state/latest.json")
+        fs.readFileSync(os.homedir() + "/.jb-state/latest.json")
     );
     let activeEditorState = state["activeEditor"];
 
@@ -22,14 +22,14 @@ export function activate(context: vscode.ExtensionContext) {
 
       // TODO(pcohen): we need to make this blocking; I believe the commands below
       // run too early when the currently opened file is changed.
-      commands.executeCommand(
-        "vscode.open",
-        Uri.file(state["activeEditor"]["path"])
+      await commands.executeCommand(
+          "vscode.open",
+          Uri.file(state["activeEditor"]["path"])
       );
 
       // Close the other tabs that might have been opened.
       // TODO(pcohen): this seems to always leave one additional tab open.
-      commands.executeCommand("workbench.action.closeOtherEditors");
+      await commands.executeCommand("workbench.action.closeOtherEditors");
     }
 
     commands.executeCommand("revealLine", {
@@ -39,13 +39,13 @@ export function activate(context: vscode.ExtensionContext) {
 
     if (editor) {
       editor.selections = activeEditorState["cursors"].map(
-        (cursor: any) =>
-          new vscode.Selection(
-            cursor.line,
-            cursor.column,
-            cursor.line,
-            cursor.column
-          )
+          (cursor: any) =>
+              new vscode.Selection(
+                  cursor.line,
+                  cursor.column,
+                  cursor.line,
+                  cursor.column
+              )
       );
     }
   }
