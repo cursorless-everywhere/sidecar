@@ -11,7 +11,7 @@ export function activate(context: vscode.ExtensionContext) {
     // TODO(pcohen): make this generic across editors
     // TODO(pcohen): diff the state against the previous state
     let state = JSON.parse(
-        fs.readFileSync(os.homedir() + "/.jb-state/latest.json")
+      fs.readFileSync(os.homedir() + "/.cursorless/editor-state.json")
     );
     let activeEditorState = state["activeEditor"];
 
@@ -23,8 +23,8 @@ export function activate(context: vscode.ExtensionContext) {
       // TODO(pcohen): we need to make this blocking; I believe the commands below
       // run too early when the currently opened file is changed.
       await commands.executeCommand(
-          "vscode.open",
-          Uri.file(state["activeEditor"]["path"])
+        "vscode.open",
+        Uri.file(state["activeEditor"]["path"])
       );
 
       // Close the other tabs that might have been opened.
@@ -51,7 +51,7 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   const watcher = vscode.workspace.createFileSystemWatcher(
-    new vscode.RelativePattern(require("os").homedir() + "/.jb-state/", "**/*")
+    new vscode.RelativePattern(require("os").homedir() + "/.cursorless/", "**/*")
   );
 
   watcher.onDidChange((uri) => {
@@ -61,6 +61,8 @@ export function activate(context: vscode.ExtensionContext) {
   watcher.onDidCreate((uri) => {
     applyJetBrainsState();
   });
+
+  applyJetBrainsState();
 
   // ================================================================================
   // Extra commands (for debugging purposes)
