@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { commands, Uri } from "vscode";
 
 export function activate(context: vscode.ExtensionContext) {
-  // vscode.window.showInformationMessage("Sidecar Loaded!");
+  vscode.window.showInformationMessage("Sidecar Loaded!");
 
   async function applyJetBrainsState() {
     const fs = require("fs");
@@ -17,15 +17,19 @@ export function activate(context: vscode.ExtensionContext) {
 
     let editor = vscode.window.activeTextEditor;
 
-    if (activeEditorState["path"] !== editor?.document.uri.path) {
+    let destPath = activeEditorState["path"];
+
+    // Prefer the temporary file if it's available
+    if (activeEditorState["temporaryFilePath"]) {
+      destPath = activeEditorState["temporaryFilePath"];
+    }
+
+    if (destPath !== editor?.document.uri.path) {
       // vscode.window.showInformationMessage("Changing paths to " + state["currentPath"]);
 
       // TODO(pcohen): we need to make this blocking; I believe the commands below
       // run too early when the currently opened file is changed.
-      await commands.executeCommand(
-        "vscode.open",
-        Uri.file(state["activeEditor"]["path"])
-      );
+      await commands.executeCommand("vscode.open", Uri.file(destPath));
 
       // Close the other tabs that might have been opened.
       // TODO(pcohen): this seems to always leave one additional tab open.
@@ -39,19 +43,22 @@ export function activate(context: vscode.ExtensionContext) {
 
     if (editor) {
       editor.selections = activeEditorState["cursors"].map(
-          (cursor: any) =>
-              new vscode.Selection(
-                  cursor.line,
-                  cursor.column,
-                  cursor.line,
-                  cursor.column
-              )
+        (cursor: any) =>
+          new vscode.Selection(
+            cursor.line,
+            cursor.column,
+            cursor.line,
+            cursor.column
+          )
       );
     }
   }
 
   const watcher = vscode.workspace.createFileSystemWatcher(
-    new vscode.RelativePattern(require("os").homedir() + "/.cursorless/", "**/*")
+    new vscode.RelativePattern(
+      require("os").homedir() + "/.cursorless/",
+      "**/*"
+    )
   );
 
   watcher.onDidChange((uri) => {
