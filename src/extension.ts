@@ -5,10 +5,10 @@ export function activate(context: vscode.ExtensionContext) {
   vscode.window.showInformationMessage("Sidecar Loaded!");
 
   // ================================================================================
-  // Applying the the other editor's state
+  // Applying the the primary/other editor's state
   // ================================================================================
 
-  async function applyJetBrainsState() {
+  async function applyPrimaryEditorState() {
     const fs = require("fs");
     const os = require("os");
 
@@ -66,14 +66,14 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   watcher.onDidChange((uri) => {
-    applyJetBrainsState();
+    applyPrimaryEditorState();
   });
 
   watcher.onDidCreate((uri) => {
-    applyJetBrainsState();
+    applyPrimaryEditorState();
   });
 
-  applyJetBrainsState();
+  applyPrimaryEditorState();
 
   // ================================================================================
   // Serializing VSCode's state
