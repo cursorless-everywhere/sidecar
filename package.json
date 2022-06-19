@@ -2,7 +2,7 @@
   "name": "cursorless-sidecar",
   "displayName": "Cursorless Sidecar",
   "description": "Adds commands to VSCode to allow it to be used as a sidecar that is synchronized to a different editor",
-  "version": "0.0.205",
+  "version": "0.0.214",
   "publisher": "phillco",
   "license": "MIT",
   "engines": {
@@ -25,6 +25,10 @@
       {
         "command": "sidecar.setCursor",
         "title": "Sidecar: Set Cursors"
+      },
+      {
+        "command": "sidecar.serializeState",
+        "title": "Sidecar: Serialize State"
       }
     ]
   },

@@ -4,6 +4,10 @@ import { commands, Uri } from "vscode";
 export function activate(context: vscode.ExtensionContext) {
   vscode.window.showInformationMessage("Sidecar Loaded!");
 
+  // ================================================================================
+  // Applying the the other editor's state
+  // ================================================================================
+
   async function applyJetBrainsState() {
     const fs = require("fs");
     const os = require("os");
@@ -70,6 +74,55 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   applyJetBrainsState();
+
+  // ================================================================================
+  // Serializing VSCode's state
+  // ================================================================================
+
+  function serializeVsCodeState(showNotification = false) {
+    const fs = require("fs");
+
+    const editor = vscode.window.activeTextEditor;
+
+    let state = {
+      path: editor?.document.uri.path,
+      cursors: editor?.selections.map((s) => {
+        return {
+          anchor: {
+            line: s.anchor.line,
+            character: s.anchor.character,
+          },
+          end: {
+            line: s.end.line,
+            character: s.end.character,
+          },
+        };
+      }),
+    };
+
+    if (showNotification) {
+      vscode.window.showInformationMessage(
+        "Wrote state: " + JSON.stringify(state)
+      );
+    }
+
+    fs.writeFileSync(
+      require("os").homedir() + "/.cursorless/vscode-state.json",
+      JSON.stringify(state)
+    );
+  }
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "sidecar.serializeState",
+      (showNotification = false) => {
+        serializeVsCodeState(showNotification);
+        return "OK";
+      }
+    )
+  );
+
+  serializeVsCodeState();
 
   // ================================================================================
   // Extra commands (for debugging purposes)
