@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { commands, Uri } from "vscode";
+import {commands, Uri} from "vscode";
 
 export function activate(context: vscode.ExtensionContext) {
   vscode.window.showInformationMessage("Sidecar Loaded!");
@@ -79,12 +79,10 @@ export function activate(context: vscode.ExtensionContext) {
   // Serializing VSCode's state
   // ================================================================================
 
-  function serializeVsCodeState(showNotification = false) {
-    const fs = require("fs");
-
+  function vsCodeState() {
     const editor = vscode.window.activeTextEditor;
 
-    let state = {
+    return {
       path: editor?.document.uri.path,
       cursors: editor?.selections.map((s) => {
         return {
@@ -99,6 +97,11 @@ export function activate(context: vscode.ExtensionContext) {
         };
       }),
     };
+  }
+
+  function serializeVsCodeState(showNotification = false) {
+    const fs = require("fs");
+    let state = vsCodeState();
 
     if (showNotification) {
       vscode.window.showInformationMessage(
@@ -123,6 +126,39 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   serializeVsCodeState();
+
+  // ================================================================================
+  // Control socket
+  // ================================================================================
+
+  try {
+    const net = require("net");
+    const fs = require("fs");
+    const os = require("os");
+
+    const socketPath = os.homedir() + "/.cursorless/vscode-socket";
+
+    try {
+      // make sure the file is deleted first.
+      fs.unlinkSync(socketPath);
+    } catch (e) {}
+
+    const unixSocketServer = net.createServer();
+    unixSocketServer.listen(socketPath, () => {
+      console.log("Control socket is now listening");
+    });
+
+    unixSocketServer.on("connection", (s: any) => {
+      // TODO(pcohen): protocol
+      let response = {
+        state: vsCodeState(),
+      };
+      s.write(JSON.stringify(response));
+      s.end();
+    });
+  } catch (e) {
+    vscode.window.showInformationMessage(`Error setting up control socket: ${e}`);
+  }
 
   // ================================================================================
   // Extra commands (for debugging purposes)
