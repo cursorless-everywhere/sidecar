@@ -2,7 +2,7 @@
   "name": "cursorless-sidecar",
   "displayName": "Cursorless Sidecar",
   "description": "Adds commands to VSCode to allow it to be used as a sidecar that is synchronized to a different editor",
-  "version": "0.0.224",
+  "version": "0.0.229",
   "publisher": "phillco",
   "license": "MIT",
   "engines": {

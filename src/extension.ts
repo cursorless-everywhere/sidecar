@@ -137,14 +137,26 @@ export function activate(context: vscode.ExtensionContext) {
    * One useful way to test this is with `socat`:
    *     echo '{ "command": "state" }' | socat - ~/.cursorless/vscode-socket | jq .
    */
-  function handleRequest(requestObj: any) {
-    switch (requestObj.command) {
-      case "ping":
-        return { response: "pong" };
-      case "state":
-        return vsCodeState();
-      default:
-        return { error: `invalid command: ${requestObj.command}` };
+  async function handleRequest(requestObj: any) {
+    try {
+      switch (requestObj.command) {
+        case "ping":
+          return { response: "pong" };
+        case "state":
+          return vsCodeState();
+        case "command":
+          // Runs a VS Code command with arguments:
+          const args = requestObj.commandArgs || [];
+          const result = await vscode.commands.executeCommand(
+            requestObj.commandId,
+            ...args
+          );
+          return { result: result };
+        default:
+          return { error: `invalid command: ${requestObj.command}` };
+      }
+    } catch (e) {
+      return { error: `exception during execution: ${e}` };
     }
   }
 
@@ -166,10 +178,10 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     unixSocketServer.on("connection", (s: any) => {
-      s.on("data", (msg: any) => {
+      s.on("data", async (msg: any) => {
         const inputString = msg.toString();
         const request = JSON.parse(inputString);
-        const response = handleRequest(request);
+        const response = await handleRequest(request);
         s.write(JSON.stringify(response));
         s.end();
       });
