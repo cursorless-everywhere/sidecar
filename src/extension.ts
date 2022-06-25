@@ -131,6 +131,23 @@ export function activate(context: vscode.ExtensionContext) {
   // Control socket
   // ================================================================================
 
+  /**
+   * Handles a request from the control socket in returns the response.
+   *
+   * One useful way to test this is with `socat`:
+   *     echo '{ "command": "state" }' | socat - ~/.cursorless/vscode-socket | jq .
+   */
+  function handleRequest(requestObj: any) {
+    switch (requestObj.command) {
+      case "ping":
+        return { response: "pong" };
+      case "state":
+        return vsCodeState();
+      default:
+        return { error: `invalid command: ${requestObj.command}` };
+    }
+  }
+
   try {
     const net = require("net");
     const fs = require("fs");
@@ -149,12 +166,14 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     unixSocketServer.on("connection", (s: any) => {
-      // TODO(pcohen): protocol
-      let response = {
-        state: vsCodeState(),
-      };
-      s.write(JSON.stringify(response));
-      s.end();
+      s.on("data", (msg: any) => {
+        const inputString = msg.toString();
+        const request = JSON.parse(inputString);
+        const response = handleRequest(request);
+        s.write(JSON.stringify(response));
+        s.end();
+      });
+      // s.end();
     });
   } catch (e) {
     vscode.window.showInformationMessage(
