@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import {commands, Uri} from "vscode";
+import { commands, Uri } from "vscode";
 
 export function activate(context: vscode.ExtensionContext) {
   vscode.window.showInformationMessage("Sidecar Loaded!");
@@ -157,7 +157,9 @@ export function activate(context: vscode.ExtensionContext) {
       s.end();
     });
   } catch (e) {
-    vscode.window.showInformationMessage(`Error setting up control socket: ${e}`);
+    vscode.window.showInformationMessage(
+      `Error setting up control socket: ${e}`
+    );
   }
 
   // ================================================================================
