@@ -138,6 +138,16 @@ export function activate(context: vscode.ExtensionContext) {
    *     echo '{ "command": "state" }' | socat - ~/.cursorless/vscode-socket | jq .
    */
   async function handleRequest(requestObj: any) {
+    /** Runs a VS Code command with arguments */
+    async function runVSCodeCommand(requestObj: any) {
+      const args = requestObj.commandArgs || [];
+      const result = await vscode.commands.executeCommand(
+        requestObj.commandId,
+        ...args
+      );
+      return { result: result };
+    }
+
     try {
       switch (requestObj.command) {
         case "ping":
@@ -145,13 +155,18 @@ export function activate(context: vscode.ExtensionContext) {
         case "state":
           return vsCodeState();
         case "command":
-          // Runs a VS Code command with arguments:
-          const args = requestObj.commandArgs || [];
-          const result = await vscode.commands.executeCommand(
-            requestObj.commandId,
-            ...args
-          );
-          return { result: result };
+          return { result: await runVSCodeCommand(requestObj) };
+        case "cursorless":
+          // Identical to "command" except that we serialize
+          // the new state afterwards so that the editor can apply it
+          const oldState = vsCodeState();
+          const commandResult = await runVSCodeCommand(requestObj);
+          const newState = vsCodeState();
+          return {
+            oldState: oldState,
+            commandResult: commandResult,
+            newState: newState,
+          };
         default:
           return { error: `invalid command: ${requestObj.command}` };
       }
