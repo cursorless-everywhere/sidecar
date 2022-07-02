@@ -79,10 +79,10 @@ export function activate(context: vscode.ExtensionContext) {
   // Serializing VSCode's state
   // ================================================================================
 
-  function vsCodeState() {
+  function vsCodeState(includeEditorContents: boolean = false) {
     const editor = vscode.window.activeTextEditor;
 
-    return {
+    let result = {
       path: editor?.document.uri.path,
       cursors: editor?.selections.map((s) => {
         return {
@@ -97,6 +97,18 @@ export function activate(context: vscode.ExtensionContext) {
         };
       }),
     };
+
+    if (includeEditorContents) {
+      const fs = require("fs");
+      // For simplicity will just write to the active path + ".out",
+      // assuming the active path is a temporary file.
+      const contentsPath = `${result.path}.out`;
+      fs.writeFileSync(contentsPath, editor?.document.getText());
+      // @ts-ignore
+      result["contentsPath"] = contentsPath;
+    }
+
+    return result;
   }
 
   function serializeVsCodeState(showNotification = false) {
@@ -140,7 +152,7 @@ export function activate(context: vscode.ExtensionContext) {
   async function handleRequest(requestObj: any) {
     /** Runs a VS Code command with arguments */
     async function runVSCodeCommand(requestObj: any) {
-      const args = requestObj.commandArgs || [];
+      const args = requestObj.args || [];
       const result = await vscode.commands.executeCommand(
         requestObj.commandId,
         ...args
@@ -154,6 +166,8 @@ export function activate(context: vscode.ExtensionContext) {
           return { response: "pong" };
         case "state":
           return vsCodeState();
+        case "stateWithContents":
+          return vsCodeState(true);
         case "command":
           return { result: await runVSCodeCommand(requestObj) };
         case "cursorless":
@@ -161,7 +175,7 @@ export function activate(context: vscode.ExtensionContext) {
           // the new state afterwards so that the editor can apply it
           const oldState = vsCodeState();
           const commandResult = await runVSCodeCommand(requestObj);
-          const newState = vsCodeState();
+          const newState = vsCodeState(true);
           return {
             oldState: oldState,
             commandResult: commandResult,
