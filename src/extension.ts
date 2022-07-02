@@ -152,7 +152,7 @@ export function activate(context: vscode.ExtensionContext) {
   async function handleRequest(requestObj: any) {
     /** Runs a VS Code command with arguments */
     async function runVSCodeCommand(requestObj: any) {
-      const args = requestObj.args || [];
+      const args = requestObj.commandArgs || [];
       const result = await vscode.commands.executeCommand(
         requestObj.commandId,
         ...args
