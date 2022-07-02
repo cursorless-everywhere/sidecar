@@ -167,6 +167,8 @@ export function activate(context: vscode.ExtensionContext) {
             commandResult: commandResult,
             newState: newState,
           };
+        case "pid":
+          return `${require("process").pid}`;
         default:
           return { error: `invalid command: ${requestObj.command}` };
       }
