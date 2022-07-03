@@ -23,6 +23,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     let destPath = activeEditorState["path"];
 
+    // TODO(pcohen): forward the language mode from the source editor, rather than just relying on the file extension
+    // (see workbench.action.editor.changeLanguageMode, but also, there is a direct
+    // API for this: vscode.languages.setLanguageId, and a voice command: "change language Python")
+
     // Prefer the temporary file if it's available
     if (activeEditorState["temporaryFilePath"]) {
       destPath = activeEditorState["temporaryFilePath"];
