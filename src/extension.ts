@@ -94,15 +94,29 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     if (editor) {
-      editor.selections = activeEditorState["cursors"].map(
-        (cursor: any) =>
-          new vscode.Selection(
-            cursor.line,
-            cursor.column,
-            cursor.line,
-            cursor.column
-          )
-      );
+      if (activeEditorState["selections"]) {
+        editor.selections = activeEditorState["selections"].map(
+          (selection: any) => {
+            return new vscode.Selection(
+              selection.anchor.line,
+              selection.anchor.column,
+              selection.active.line,
+              selection.active.column
+            );
+          }
+        );
+      } else {
+        // TODO(rntz): migrate to |activeEditorState["selections"]|
+        editor.selections = activeEditorState["cursors"].map(
+          (cursor: any) =>
+            new vscode.Selection(
+              cursor.line,
+              cursor.column,
+              cursor.line,
+              cursor.column
+            )
+        );
+      }
     }
   }
 
