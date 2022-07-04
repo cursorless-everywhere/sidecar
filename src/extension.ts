@@ -8,9 +8,53 @@ export function activate(context: vscode.ExtensionContext) {
   // Applying the the primary/other editor's state
   // ================================================================================
 
+  /**
+   * Supports reading a "feature flag", which is just a local file with boolean value.
+   */
+  function readFlagFile(path: string, defaultValue: boolean): boolean {
+    const fs = require("fs");
+
+    if (!fs.existsSync(path)) {
+      return defaultValue;
+    }
+
+    try {
+      const contents = fs.readFileSync(path, "utf8").trim().toLowerCase();
+      switch (contents) {
+        case "true":
+          return true;
+        case "false":
+          return false;
+        default:
+          return defaultValue;
+      }
+    } catch (e) {
+      return defaultValue;
+    }
+  }
+
+  /**
+   * Reads the state of the primary ("superior") editor and makes VS Code mimic it
+   * (current file, selections, scroll area, etc.)
+   */
   async function applyPrimaryEditorState() {
     const fs = require("fs");
     const os = require("os");
+    const path = require("path");
+
+    const SIDECAR_FEATURE_FLAG_PATH = path.join(
+      os.homedir(),
+      ".cursorless/sidecar-enabled"
+    );
+
+    // Allowed disabling the sidecar with a flag, so you can actually use other parts of VS Code
+    // when needed.
+    if (!readFlagFile(SIDECAR_FEATURE_FLAG_PATH, true)) {
+      console.log(
+        `applyPrimaryEditorState: ${SIDECAR_FEATURE_FLAG_PATH} set to false; not synchronizing`
+      );
+      return;
+    }
 
     // TODO(pcohen): make this generic across editors
     // TODO(pcohen): diff the state against the previous state
