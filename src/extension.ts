@@ -226,6 +226,11 @@ export function activate(context: vscode.ExtensionContext) {
           return vsCodeState();
         case "stateWithContents":
           return vsCodeState(true);
+        case "applyPrimaryEditorState":
+          // TODO(pcohen): this may change the editor state,
+          // but it doesn't actually block on Cursorless applying those changes
+          applyPrimaryEditorState();
+          return "OK";
         case "command":
           return { result: await runVSCodeCommand(requestObj) };
         case "cursorless":
