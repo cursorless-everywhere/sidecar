@@ -224,6 +224,8 @@ export function activate(context: vscode.ExtensionContext) {
 
     unixSocketServer.on("connection", (s: any) => {
       s.on("data", async (msg: any) => {
+        // TODO(pcohen): build up a string buffer until we get to a new line, then try to parse it
+        // since we can't guarantee that the entire message will be received in one chunk
         const inputString = msg.toString();
         const request = JSON.parse(inputString);
         const response = await handleRequest(request);
