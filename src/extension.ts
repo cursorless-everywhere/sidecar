@@ -94,6 +94,16 @@ export function activate(context: vscode.ExtensionContext) {
             line: s.anchor.line,
             character: s.anchor.character,
           },
+          active: {
+            line: s.active.line,
+            character: s.active.character,
+          },
+          // NOTE(pcohen): these are included just for ease of implementation;
+          // obviously the receiving end could which of the anchor/active is the start/end
+          start: {
+            line: s.start.line,
+            character: s.start.character,
+          },
           end: {
             line: s.end.line,
             character: s.end.character,
