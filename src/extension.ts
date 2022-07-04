@@ -185,14 +185,25 @@ export function activate(context: vscode.ExtensionContext) {
         case "command":
           return { result: await runVSCodeCommand(requestObj) };
         case "cursorless":
-          // Identical to "command" except that we serialize
-          // the new state afterwards so that the editor can apply it
+          // NOTE(pcohen): this need not be Cursorless specific; perhaps a better command name might be
+          // along the lines of "execute command and serialize state"
+
+          // NOTE(pcohen): this is wrapped as JSON mostly to simplify stuff on the Kotlin sighed
+          const cursorlessArgs = JSON.parse(requestObj.cursorlessArgs);
+
           const oldState = vsCodeState();
-          const commandResult = await runVSCodeCommand(requestObj);
+          // TODO(pcohen): Cursorless may throw errors if the users command wasn't valid,
+          // which we need to surface back up to the user
+          // for example: "NoContainingScopeError: Couldn't find containing namedFunction."
+          const commandResult = await vscode.commands.executeCommand(
+            "cursorless.command",
+            ...cursorlessArgs
+          );
+
           const newState = vsCodeState(true);
           return {
             oldState: oldState,
-            commandResult: commandResult,
+            commandResult: JSON.stringify(commandResult),
             newState: newState,
           };
         case "pid":
