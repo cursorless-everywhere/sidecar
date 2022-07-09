@@ -2,8 +2,6 @@ import * as vscode from "vscode";
 import { commands, Uri } from "vscode";
 
 export function activate(context: vscode.ExtensionContext) {
-  vscode.window.showInformationMessage("Sidecar Loaded!");
-
   // ================================================================================
   // Applying the the primary/other editor's state
   // ================================================================================
@@ -64,6 +62,16 @@ export function activate(context: vscode.ExtensionContext) {
     let activeEditorState = state["activeEditor"];
 
     let editor = vscode.window.activeTextEditor;
+
+    // If we got into a state where the editor has local changes, always revert them. Otherwise all subsequent
+    // commands will fail.
+    //
+    // Note that this shouldn't happen ideally. This can happen if chaining is attempted (need to find
+    // a better synchronization solution).
+    if (editor?.document.isDirty) {
+      vscode.window.showInformationMessage("Editor is dirty; reverting first");
+      await commands.executeCommand("workbench.action.files.revert");
+    }
 
     let destPath = activeEditorState["path"];
 
