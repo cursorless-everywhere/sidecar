@@ -263,20 +263,26 @@ export function activate(context: vscode.ExtensionContext) {
           const cursorlessArgs = JSON.parse(requestObj.cursorlessArgs);
 
           const oldState = vsCodeState();
-          // TODO(pcohen): Cursorless may throw errors if the users command wasn't valid,
-          // which we need to surface back up to the user
-          // for example: "NoContainingScopeError: Couldn't find containing namedFunction."
-          const commandResult = await vscode.commands.executeCommand(
-            "cursorless.command",
-            ...cursorlessArgs
-          );
 
-          const newState = vsCodeState(true);
-          return {
-            oldState: oldState,
-            commandResult: JSON.stringify(commandResult),
-            newState: newState,
-          };
+          try {
+            // TODO(pcohen): Cursorless may throw errors if the users command wasn't valid,
+            // which we need to surface back up to the user
+            // for example: "NoContainingScopeError: Couldn't find containing namedFunction."
+            const commandResult = await vscode.commands.executeCommand(
+              "cursorless.command",
+              ...cursorlessArgs
+            );
+            const newState = vsCodeState(true);
+            return {
+              oldState: oldState,
+              commandResult: JSON.stringify(commandResult),
+              newState: newState,
+            };
+          } catch (e) {
+            return {
+              commandException: `${e}`,
+            };
+          }
         case "pid":
           return `${require("process").pid}`;
         default:
