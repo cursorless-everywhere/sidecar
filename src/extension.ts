@@ -265,9 +265,6 @@ export function activate(context: vscode.ExtensionContext) {
           const oldState = vsCodeState();
 
           try {
-            // TODO(pcohen): Cursorless may throw errors if the users command wasn't valid,
-            // which we need to surface back up to the user
-            // for example: "NoContainingScopeError: Couldn't find containing namedFunction."
             const commandResult = await vscode.commands.executeCommand(
               "cursorless.command",
               ...cursorlessArgs
