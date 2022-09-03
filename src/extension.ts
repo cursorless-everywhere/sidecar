@@ -191,34 +191,6 @@ export function activate(context: vscode.ExtensionContext) {
     return result;
   }
 
-  function serializeVsCodeState(showNotification = false) {
-    const fs = require("fs");
-    let state = vsCodeState();
-
-    if (showNotification) {
-      vscode.window.showInformationMessage(
-        "Wrote state: " + JSON.stringify(state)
-      );
-    }
-
-    fs.writeFileSync(
-      require("os").homedir() + "/.cursorless/vscode-state.json",
-      JSON.stringify(state)
-    );
-  }
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "sidecar.serializeState",
-      (showNotification = false) => {
-        serializeVsCodeState(showNotification);
-        return "OK";
-      }
-    )
-  );
-
-  serializeVsCodeState();
-
   // ================================================================================
   // Control socket
   // ================================================================================
