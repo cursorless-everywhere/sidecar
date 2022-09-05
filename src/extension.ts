@@ -258,6 +258,9 @@ export function activate(context: vscode.ExtensionContext) {
           return { error: `invalid command: ${requestObj.command}` };
       }
     } catch (e) {
+      vscode.window.showInformationMessage(
+        `Error during evaluation of command "${requestObj.command}": ${e}`
+      );
       return { error: `exception during execution: ${e}` };
     }
   }
