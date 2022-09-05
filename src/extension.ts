@@ -154,6 +154,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     let result = {
       path: editor?.document.uri.path,
+      visibleRanges: editor?.visibleRanges,
       cursors: editor?.selections.map((s) => {
         return {
           anchor: {
