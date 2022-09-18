@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { commands, Uri } from "vscode";
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   // ================================================================================
   // Applying the the primary/other editor's state
   // ================================================================================
