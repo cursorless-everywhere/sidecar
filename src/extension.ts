@@ -35,6 +35,73 @@ export async function activate(context: vscode.ExtensionContext) {
    * Reads the state of the primary ("superior") editor and makes VS Code mimic it
    * (current file, selections, scroll area, etc.)
    */
+  async function applyEditorStateToVscodeEditor(
+    editorState: any,
+    editor: vscode.TextEditor
+  ) {
+    // If we got into a state where the editor has local changes, always revert them. Otherwise all subsequent
+    // commands will fail.
+    //
+    // Note that this shouldn't happen ideally. This can happen if chaining is attempted (need to find
+    // a better synchronization solution).
+    if (editor?.document.isDirty) {
+      vscode.window.showInformationMessage("Editor is dirty; reverting first");
+      await commands.executeCommand("workbench.action.files.revert");
+    }
+
+    let destPath = editorState["path"];
+
+    // TODO(pcohen): forward the language mode from the source editor, rather than just relying on the file extension
+    // (see workbench.action.editor.changeLanguageMode, but also, there is a direct
+    // API for this: vscode.languages.setLanguageId, and a voice command: "change language Python")
+
+    // Prefer the temporary file if it's available
+    if (editorState["temporaryFilePath"]) {
+      destPath = editorState["temporaryFilePath"];
+    }
+
+    if (destPath !== editor?.document.uri.path) {
+      // vscode.window.showInformationMessage("Changing paths to " + state["currentPath"]);
+
+      // TODO(pcohen): we need to make this blocking; I believe the commands below
+      // run too early when the currently opened file is changed.
+      await commands.executeCommand("vscode.open", Uri.file(destPath));
+
+      // Close the other tabs that might have been opened.
+      // TODO(pcohen): this seems to always leave one additional tab open.
+      await commands.executeCommand("workbench.action.closeOtherEditors");
+    }
+
+    commands.executeCommand("revealLine", {
+      lineNumber: editorState["firstVisibleLine"] - 1,
+      at: "top",
+    });
+
+    if (editor) {
+      if (editorState["selections"]) {
+        editor.selections = editorState["selections"].map((selection: any) => {
+          return new vscode.Selection(
+            selection.anchor.line,
+            selection.anchor.column,
+            selection.active.line,
+            selection.active.column
+          );
+        });
+      } else {
+        // TODO(rntz): migrate to |editorState["selections"]|
+        editor.selections = editorState["cursors"].map(
+          (cursor: any) =>
+            new vscode.Selection(
+              cursor.line,
+              cursor.column,
+              cursor.line,
+              cursor.column
+            )
+        );
+      }
+    }
+  }
+
   async function applyPrimaryEditorState() {
     const fs = require("fs");
     const os = require("os");
@@ -59,72 +126,12 @@ export async function activate(context: vscode.ExtensionContext) {
     let state = JSON.parse(
       fs.readFileSync(os.homedir() + "/.cursorless/editor-state.json")
     );
-    let activeEditorState = state["activeEditor"];
 
-    let editor = vscode.window.activeTextEditor;
-
-    // If we got into a state where the editor has local changes, always revert them. Otherwise all subsequent
-    // commands will fail.
-    //
-    // Note that this shouldn't happen ideally. This can happen if chaining is attempted (need to find
-    // a better synchronization solution).
-    if (editor?.document.isDirty) {
-      vscode.window.showInformationMessage("Editor is dirty; reverting first");
-      await commands.executeCommand("workbench.action.files.revert");
-    }
-
-    let destPath = activeEditorState["path"];
-
-    // TODO(pcohen): forward the language mode from the source editor, rather than just relying on the file extension
-    // (see workbench.action.editor.changeLanguageMode, but also, there is a direct
-    // API for this: vscode.languages.setLanguageId, and a voice command: "change language Python")
-
-    // Prefer the temporary file if it's available
-    if (activeEditorState["temporaryFilePath"]) {
-      destPath = activeEditorState["temporaryFilePath"];
-    }
-
-    if (destPath !== editor?.document.uri.path) {
-      // vscode.window.showInformationMessage("Changing paths to " + state["currentPath"]);
-
-      // TODO(pcohen): we need to make this blocking; I believe the commands below
-      // run too early when the currently opened file is changed.
-      await commands.executeCommand("vscode.open", Uri.file(destPath));
-
-      // Close the other tabs that might have been opened.
-      // TODO(pcohen): this seems to always leave one additional tab open.
-      await commands.executeCommand("workbench.action.closeOtherEditors");
-    }
-
-    commands.executeCommand("revealLine", {
-      lineNumber: activeEditorState["firstVisibleLine"] - 1,
-      at: "top",
-    });
-
-    if (editor) {
-      if (activeEditorState["selections"]) {
-        editor.selections = activeEditorState["selections"].map(
-          (selection: any) => {
-            return new vscode.Selection(
-              selection.anchor.line,
-              selection.anchor.column,
-              selection.active.line,
-              selection.active.column
-            );
-          }
-        );
-      } else {
-        // TODO(rntz): migrate to |activeEditorState["selections"]|
-        editor.selections = activeEditorState["cursors"].map(
-          (cursor: any) =>
-            new vscode.Selection(
-              cursor.line,
-              cursor.column,
-              cursor.line,
-              cursor.column
-            )
-        );
-      }
+    if (vscode.window.activeTextEditor) {
+      await applyEditorStateToVscodeEditor(
+        state["editors"][0],
+        vscode.window.activeTextEditor
+      );
     }
   }
 
