@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { property, map, indexOf, zipObject,keys } from "lodash";
 import { commands, Uri } from "vscode";
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -66,16 +67,7 @@ export async function activate(context: vscode.ExtensionContext) {
       // TODO(pcohen): we need to make this blocking; I believe the commands below
       // run too early when the currently opened file is changed.
       await commands.executeCommand("vscode.open", Uri.file(destPath));
-
-      // Close the other tabs that might have been opened.
-      // TODO(pcohen): this seems to always leave one additional tab open.
-      await commands.executeCommand("workbench.action.closeOtherEditors");
     }
-
-    commands.executeCommand("revealLine", {
-      lineNumber: editorState["firstVisibleLine"] - 1,
-      at: "top",
-    });
 
     if (editor) {
       if (editorState["selections"]) {
@@ -127,22 +119,58 @@ export async function activate(context: vscode.ExtensionContext) {
       fs.readFileSync(os.homedir() + "/.cursorless/editor-state.json")
     );
 
-    if (vscode.window.activeTextEditor) {
-      await applyEditorStateToVscodeEditor(
-        state["editors"][0],
-        vscode.window.activeTextEditor
-      );
+    // map tempfilepath to vscode editor (eventually id to vscode editor)
+    const editorMap = zipObject(
+      map(vscode.window.visibleTextEditors, property("document.fileName")),
+      vscode.window.visibleTextEditors
+    );
+
+    let differentVisibleWindows = false;
+    let superiorEditorVisibleFileNames = map(
+      state["editors"],
+      property("temporaryFilePath")
+    );
+
+    superiorEditorVisibleFileNames.forEach((superiorEditorFileName) => {
+      if (keys(editorMap).indexOf(superiorEditorFileName) === -1) {
+        differentVisibleWindows = true;
+      }
+    });
+
+
+    if (differentVisibleWindows) {
+      // Close the other tabs that might have been opened.
+      // TODO(pcohen): this seems to always leave one additional tab open.
+      await commands.executeCommand("workbench.action.closeAllEditors");
+
+      state["editors"].forEach(async (editorState: any) => {
+        let vscodeEditor = await vscode.window.showTextDocument(
+          Uri.file(editorState["temporaryFilePath"]),
+          {
+            viewColumn: vscode.ViewColumn.Beside,
+          }
+        );
+        await applyEditorStateToVscodeEditor(editorState, vscodeEditor);
+      });
+    } else {
+      state["editors"].forEach(async (editorState: any) => {
+        await applyEditorStateToVscodeEditor(
+          editorState,
+          editorMap[editorState["temporaryFilePath"]]
+        );
+      });
     }
   }
 
   const watcher = vscode.workspace.createFileSystemWatcher(
     new vscode.RelativePattern(
       require("os").homedir() + "/.cursorless/",
-      "*editor-state.json"
+      "*-state.json"
     )
   );
 
   watcher.onDidChange((uri) => {
+    console.log('changed');
     applyPrimaryEditorState();
   });
 
@@ -157,8 +185,14 @@ export async function activate(context: vscode.ExtensionContext) {
   // ================================================================================
 
   function vsCodeState(includeEditorContents: boolean = false) {
-    const editor = vscode.window.activeTextEditor;
+    return {
+      editors: map(vscode.window.visibleTextEditors, (textEditor) => {
+        return vsCodeEditorState(textEditor, includeEditorContents);
+      })
+    }
+  }
 
+  function vsCodeEditorState(editor: vscode.TextEditor, includeEditorContents: boolean = false) {
     let result = {
       path: editor?.document.uri.path,
       cursors: editor?.selections.map((s) => {
