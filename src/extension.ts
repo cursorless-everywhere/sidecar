@@ -2,6 +2,34 @@ import * as vscode from "vscode";
 import { property, map, indexOf, zipObject,keys } from "lodash";
 import { commands, Uri } from "vscode";
 
+
+const columnFocusCommands = {
+  [vscode.ViewColumn.One]: "workbench.action.focusFirstEditorGroup",
+  [vscode.ViewColumn.Two]: "workbench.action.focusSecondEditorGroup",
+  [vscode.ViewColumn.Three]: "workbench.action.focusThirdEditorGroup",
+  [vscode.ViewColumn.Four]: "workbench.action.focusFourthEditorGroup",
+  [vscode.ViewColumn.Five]: "workbench.action.focusFifthEditorGroup",
+  [vscode.ViewColumn.Six]: "workbench.action.focusSixthEditorGroup",
+  [vscode.ViewColumn.Seven]: "workbench.action.focusSeventhEditorGroup",
+  [vscode.ViewColumn.Eight]: "workbench.action.focusEighthEditorGroup",
+  [vscode.ViewColumn.Nine]: "workbench.action.focusNinthEditorGroup",
+  [vscode.ViewColumn.Active]: "",
+  [vscode.ViewColumn.Beside]: "",
+};
+
+export async function focusEditor(editor: vscode.TextEditor) {
+  const viewColumn = getViewColumn(editor);
+  if (viewColumn != null) {
+    await commands.executeCommand(columnFocusCommands[viewColumn]);
+  }
+}
+
+function getViewColumn(editor: vscode.TextEditor): vscode.ViewColumn | undefined {
+  if (editor.viewColumn != null) {
+    return editor.viewColumn;
+  }
+}
+
 export async function activate(context: vscode.ExtensionContext) {
   // ================================================================================
   // Applying the the primary/other editor's state
@@ -137,6 +165,7 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     });
 
+    let activeEditor;
 
     if (differentVisibleWindows) {
       // Close the other tabs that might have been opened.
@@ -150,16 +179,30 @@ export async function activate(context: vscode.ExtensionContext) {
             viewColumn: vscode.ViewColumn.Beside,
           }
         );
+
+
+
+
+        if (editorState["active"] === true) {
+          activeEditor = vscodeEditor;
+        }
+
         await applyEditorStateToVscodeEditor(editorState, vscodeEditor);
       });
     } else {
       state["editors"].forEach(async (editorState: any) => {
+        if (editorState["active"] === true) {
+          activeEditor = editorMap[editorState["temporaryFilePath"]];
+        }
         await applyEditorStateToVscodeEditor(
           editorState,
           editorMap[editorState["temporaryFilePath"]]
         );
       });
     }
+
+    await focusEditor(activeEditor);
+
   }
 
   const watcher = vscode.workspace.createFileSystemWatcher(
@@ -170,7 +213,6 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   watcher.onDidChange((uri) => {
-    console.log('changed');
     applyPrimaryEditorState();
   });
 
