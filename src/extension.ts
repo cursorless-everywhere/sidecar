@@ -1,5 +1,13 @@
 import * as vscode from "vscode";
 import { commands, Uri } from "vscode";
+import { randomUUID } from "crypto";
+import * as express from 'express';
+import * as os from "os";
+import * as fs from "fs";
+import * as bodyParser from "body-parser";
+
+
+
 
 export async function activate(context: vscode.ExtensionContext) {
   // ================================================================================
@@ -265,10 +273,47 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   }
 
+  type LocalNonce = { value: string };
+
+  try {
+    const nonce = { value: randomUUID() };
+    const noncFilePath = os.homedir() + "/.cursorless/nonce.json";
+    fs.writeFileSync(noncFilePath, JSON.stringify(nonce));
+    //create a server object:
+    const app = express();
+    app.use(bodyParser.json());
+    app.post("/cursorless", 
+       async (req, res) => {
+         try {
+          if (req.headers["nonce"] === nonce.value)
+          {
+             res.setHeader('Content-Type', 'text/json');
+             var request = req.body;
+             const response = await handleRequest(request);
+             res.write(JSON.stringify(response));
+          } else {
+            res.sendStatus(401).send(new Error( "nonce miss match"));
+          }
+        } 
+        catch (e)
+        {
+          res.sendStatus(501).send(new Error("We messed up somewhere"));
+        }
+        finally {
+          res.end();
+        }
+      })
+      .listen(5027, 'localhost');
+  } catch (e) {
+    vscode.window.showInformationMessage(`Error setting up Http Listent: ${e}`);
+  }
+
+  // This was the original method of communicating between the the Cursorless-SideCare and clients.
+  // It works well on unix machines, but on windows Node uses named pipes instead of
+  // Unix Domain sockets. So that clients which work on Linux and Windows (eg, Jetbrains IDE's) do not need to implement
+  // code for Named Pipes and Unix Domain Sockets write clients to use thhe HTTP server above.
   try {
     const net = require("net");
-    const fs = require("fs");
-    const os = require("os");
 
     const socketPath = os.homedir() + "/.cursorless/vscode-socket";
 
