@@ -1,13 +1,10 @@
 import * as vscode from "vscode";
 import { commands, Uri } from "vscode";
 import { randomUUID } from "crypto";
-import * as express from 'express';
+import * as express from "express";
 import * as os from "os";
 import * as fs from "fs";
 import * as bodyParser from "body-parser";
-
-
-
 
 export async function activate(context: vscode.ExtensionContext) {
   // ================================================================================
@@ -157,7 +154,24 @@ export async function activate(context: vscode.ExtensionContext) {
   // Serializing VSCode's state
   // ================================================================================
 
-  function vsCodeState(includeEditorContents: boolean = false) {
+  type Position = {
+    line: number;
+    character: number;
+  };
+
+  type Cursor = {
+    anchor: Position;
+    active: Position;
+    start: Position;
+    end: Position;
+  };
+
+  type VsCopdeState = {
+    path: string | undefined;
+    cursors: Cursor[] | undefined;
+  };
+
+  function vsCodeState(includeEditorContents: boolean = false): VsCopdeState {
     const editor = vscode.window.activeTextEditor;
 
     let result = {
@@ -240,7 +254,11 @@ export async function activate(context: vscode.ExtensionContext) {
           // along the lines of "execute command and serialize state"
 
           // NOTE(pcohen): this is wrapped as JSON mostly to simplify stuff on the Kotlin sighed
-          const cursorlessArgs = JSON.parse(requestObj.cursorlessArgs);
+
+          const cursorlessArgs =
+            typeof requestObj.cursorlessArgs === "string"
+              ? JSON.parse(requestObj.cursorlessArgs)
+              : requestObj.cursorlessArgs;
 
           const oldState = vsCodeState();
 
@@ -279,33 +297,30 @@ export async function activate(context: vscode.ExtensionContext) {
     const nonce = { value: randomUUID() };
     const noncFilePath = os.homedir() + "/.cursorless/nonce.json";
     fs.writeFileSync(noncFilePath, JSON.stringify(nonce));
-    //create a server object:
     const app = express();
     app.use(bodyParser.json());
-    app.post("/cursorless", 
-       async (req, res) => {
-         try {
-          if (req.headers["nonce"] === nonce.value)
-          {
-             res.setHeader('Content-Type', 'text/json');
-             var request = req.body;
-             const response = await handleRequest(request);
-             res.write(JSON.stringify(response));
+    app
+      .post("/cursorless/command", async (req, res) => {
+        try {
+          if (req.headers["nonce"] === nonce.value) {
+            res.setHeader("Content-Type", "text/json");
+            var request = req.body;
+            const response = await handleRequest(request);
+            res.write(JSON.stringify(response));
           } else {
-            res.sendStatus(401).send(new Error( "nonce miss match"));
+            res.sendStatus(401).send(new Error("nonce miss match"));
           }
-        } 
-        catch (e)
-        {
+        } catch (e) {
           res.sendStatus(501).send(new Error("We messed up somewhere"));
-        }
-        finally {
+        } finally {
           res.end();
         }
       })
-      .listen(5027, 'localhost');
+      .listen(5027, "localhost");
   } catch (e) {
-    vscode.window.showInformationMessage(`Error setting up Http Listent: ${e}`);
+    vscode.window.showInformationMessage(
+      `Error setting up Http Listener: ${e}`
+    );
   }
 
   // This was the original method of communicating between the the Cursorless-SideCare and clients.
