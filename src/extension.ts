@@ -1,5 +1,10 @@
 import * as vscode from "vscode";
 import { commands, Uri } from "vscode";
+import { randomUUID } from "crypto";
+import * as express from "express";
+import * as os from "os";
+import * as fs from "fs";
+import * as bodyParser from "body-parser";
 
 export async function activate(context: vscode.ExtensionContext) {
   // ================================================================================
@@ -149,33 +154,29 @@ export async function activate(context: vscode.ExtensionContext) {
   // Serializing VSCode's state
   // ================================================================================
 
-  function vsCodeState(includeEditorContents: boolean = false) {
+  type Position = {
+    line: number;
+    character: number;
+  };
+
+  type Cursor = {
+    anchor: Position;
+    active: Position;
+    start: Position;
+    end: Position;
+  };
+
+  type VsCopdeState = {
+    path: string | undefined;
+    cursors: Cursor[] | undefined;
+  };
+
+  function vsCodeState(includeEditorContents: boolean = false): VsCopdeState {
     const editor = vscode.window.activeTextEditor;
 
     let result = {
       path: editor?.document.uri.path,
-      cursors: editor?.selections.map((s) => {
-        return {
-          anchor: {
-            line: s.anchor.line,
-            character: s.anchor.character,
-          },
-          active: {
-            line: s.active.line,
-            character: s.active.character,
-          },
-          // NOTE(pcohen): these are included just for ease of implementation;
-          // obviously the receiving end could which of the anchor/active is the start/end
-          start: {
-            line: s.start.line,
-            character: s.start.character,
-          },
-          end: {
-            line: s.end.line,
-            character: s.end.character,
-          },
-        };
-      }),
+      cursors: getCursorDetails(editor),
     };
 
     if (includeEditorContents) {
@@ -189,6 +190,31 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     return result;
+  }
+
+  function getCursorDetails(editor: vscode.TextEditor | undefined) {
+        return editor?.selections.map((s) => {
+      return {
+        anchor: {
+          line: s.anchor.line,
+          character: s.anchor.character,
+        },
+        active: {
+          line: s.active.line,
+          character: s.active.character,
+        },
+        // NOTE(pcohen): these are included just for ease of implementation;
+        // obviously the receiving end could which of the anchor/active is the start/end
+        start: {
+          line: s.start.line,
+          character: s.start.character,
+        },
+        end: {
+          line: s.end.line,
+          character: s.end.character,
+        },
+      };
+    });
   }
 
   // ================================================================================
@@ -227,12 +253,30 @@ export async function activate(context: vscode.ExtensionContext) {
           return "OK";
         case "command":
           return { result: await runVSCodeCommand(requestObj) };
+        case "hats":
+         
+          try {
+            const commandResult = await vscode.commands.executeCommand("cursorless.getDecorations");
+            const editor = vscode.window.activeTextEditor;
+            return {
+              hats: commandResult,
+              cursors:   getCursorDetails(editor)
+            };
+          } catch (e) {
+            return {
+              commandException: `${e}`,
+            };
+          }
         case "cursorless":
           // NOTE(pcohen): this need not be Cursorless specific; perhaps a better command name might be
           // along the lines of "execute command and serialize state"
 
           // NOTE(pcohen): this is wrapped as JSON mostly to simplify stuff on the Kotlin sighed
-          const cursorlessArgs = JSON.parse(requestObj.cursorlessArgs);
+          
+          const cursorlessArgs =
+            typeof requestObj.cursorlessArgs === "string"
+              ? JSON.parse(requestObj.cursorlessArgs)
+              : requestObj.cursorlessArgs;
 
           const oldState = vsCodeState();
 
@@ -241,10 +285,13 @@ export async function activate(context: vscode.ExtensionContext) {
               "cursorless.command",
               ...cursorlessArgs
             );
-            const newState = vsCodeState(true);
+            const newState = requestObj.embedContents
+              ? getEmbeddedStyleContent()
+              : vsCodeState(true);
             return {
               oldState: oldState,
               commandResult: JSON.stringify(commandResult),
+              hats: await vscode.commands.executeCommand("cursorless.getDecorations"),
               newState: newState,
             };
           } catch (e) {
@@ -265,10 +312,45 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   }
 
+  type LocalNonce = { value: string };
+
+  try {
+    const nonce = { value: randomUUID() };
+    const noncFilePath = os.homedir() + "/.cursorless/nonce.json";
+    fs.writeFileSync(noncFilePath, JSON.stringify(nonce));
+    const app = express();
+    app.use(bodyParser.json());
+    app
+      .post("/cursorless/:command", async (req, res) => {
+        try {
+          if (req.headers["nonce"] === nonce.value) {
+            res.setHeader("Content-Type", "text/json");
+            var request = req.body;
+            request.command = req.params["command"];
+            const response = await handleRequest(request);
+            res.write(JSON.stringify(response));
+          } else {
+            res.sendStatus(401).send(new Error("nonce miss match"));
+          }
+        } catch (e) {
+          res.sendStatus(501).send(new Error("We messed up somewhere"));
+        } finally {
+          res.end();
+        }
+      })
+      .listen(5027, "localhost");
+  } catch (e) {
+    vscode.window.showInformationMessage(
+      `Error setting up Http Listener: ${e}`
+    );
+  }
+
+  // This was the original method of communicating between the the Cursorless-SideCare and clients.
+  // It works well on unix machines, but on windows Node uses named pipes instead of
+  // Unix Domain sockets. So that clients which work on Linux and Windows (eg, Jetbrains IDE's) do not need to implement
+  // code for Named Pipes and Unix Domain Sockets write clients to use thhe HTTP server above.
   try {
     const net = require("net");
-    const fs = require("fs");
-    const os = require("os");
 
     const socketPath = os.homedir() + "/.cursorless/vscode-socket";
 
@@ -325,6 +407,14 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     })
   );
+
+  function getEmbeddedStyleContent() {
+    const editor = vscode.window.activeTextEditor;
+    return {
+      cursors: getCursorDetails(editor),
+      document: editor?.document.getText(),
+    };
+  }
 }
 
 // this method is called when your extension is deactivated
