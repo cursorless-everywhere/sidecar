@@ -176,28 +176,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     let result = {
       path: editor?.document.uri.path,
-      cursors: editor?.selections.map((s) => {
-        return {
-          anchor: {
-            line: s.anchor.line,
-            character: s.anchor.character,
-          },
-          active: {
-            line: s.active.line,
-            character: s.active.character,
-          },
-          // NOTE(pcohen): these are included just for ease of implementation;
-          // obviously the receiving end could which of the anchor/active is the start/end
-          start: {
-            line: s.start.line,
-            character: s.start.character,
-          },
-          end: {
-            line: s.end.line,
-            character: s.end.character,
-          },
-        };
-      }),
+      cursors: getCursorDetails(editor),
     };
 
     if (includeEditorContents) {
@@ -211,6 +190,31 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     return result;
+  }
+
+  function getCursorDetails(editor: vscode.TextEditor | undefined) {
+        return editor?.selections.map((s) => {
+      return {
+        anchor: {
+          line: s.anchor.line,
+          character: s.anchor.character,
+        },
+        active: {
+          line: s.active.line,
+          character: s.active.character,
+        },
+        // NOTE(pcohen): these are included just for ease of implementation;
+        // obviously the receiving end could which of the anchor/active is the start/end
+        start: {
+          line: s.start.line,
+          character: s.start.character,
+        },
+        end: {
+          line: s.end.line,
+          character: s.end.character,
+        },
+      };
+    });
   }
 
   // ================================================================================
@@ -249,12 +253,26 @@ export async function activate(context: vscode.ExtensionContext) {
           return "OK";
         case "command":
           return { result: await runVSCodeCommand(requestObj) };
+        case "hats":
+         
+          try {
+            const commandResult = await vscode.commands.executeCommand("cursorless.getDecorations");
+            const editor = vscode.window.activeTextEditor;
+            return {
+              hats: commandResult,
+              cursors:   getCursorDetails(editor)
+            };
+          } catch (e) {
+            return {
+              commandException: `${e}`,
+            };
+          }
         case "cursorless":
           // NOTE(pcohen): this need not be Cursorless specific; perhaps a better command name might be
           // along the lines of "execute command and serialize state"
 
           // NOTE(pcohen): this is wrapped as JSON mostly to simplify stuff on the Kotlin sighed
-
+          
           const cursorlessArgs =
             typeof requestObj.cursorlessArgs === "string"
               ? JSON.parse(requestObj.cursorlessArgs)
@@ -267,10 +285,13 @@ export async function activate(context: vscode.ExtensionContext) {
               "cursorless.command",
               ...cursorlessArgs
             );
-            const newState = vsCodeState(true);
+            const newState = requestObj.embedContents
+              ? getEmbeddedStyleContent()
+              : vsCodeState(true);
             return {
               oldState: oldState,
               commandResult: JSON.stringify(commandResult),
+              hats: await vscode.commands.executeCommand("cursorless.getDecorations"),
               newState: newState,
             };
           } catch (e) {
@@ -300,11 +321,12 @@ export async function activate(context: vscode.ExtensionContext) {
     const app = express();
     app.use(bodyParser.json());
     app
-      .post("/cursorless/command", async (req, res) => {
+      .post("/cursorless/:command", async (req, res) => {
         try {
           if (req.headers["nonce"] === nonce.value) {
             res.setHeader("Content-Type", "text/json");
             var request = req.body;
+            request.command = req.params["command"];
             const response = await handleRequest(request);
             res.write(JSON.stringify(response));
           } else {
@@ -385,6 +407,14 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     })
   );
+
+  function getEmbeddedStyleContent() {
+    const editor = vscode.window.activeTextEditor;
+    return {
+      cursors: getCursorDetails(editor),
+      document: editor?.document.getText(),
+    };
+  }
 }
 
 // this method is called when your extension is deactivated
