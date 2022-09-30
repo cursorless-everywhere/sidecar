@@ -72,7 +72,6 @@ export async function activate(context: vscode.ExtensionContext) {
     // Note that this shouldn't happen ideally. This can happen if chaining is attempted (need to find
     // a better synchronization solution).
     if (editor?.document.isDirty) {
-      vscode.window.showInformationMessage("Editor is dirty; reverting first");
       await commands.executeCommand("workbench.action.files.revert");
     }
 
