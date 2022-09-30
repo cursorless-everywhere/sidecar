@@ -2,15 +2,51 @@ import * as vscode from "vscode";
 import { commands, Uri } from "vscode";
 import { randomUUID } from "crypto";
 import * as express from "express";
-import * as os from "os";
 import * as fs from "fs";
+import * as os from "os";
 import * as bodyParser from "body-parser";
 
+
+import {MemFS} from "./memoryFSProvider";
+
 export async function activate(context: vscode.ExtensionContext) {
+
+  type FileSystem = {
+    readFile:  (uri: string) => Uint8Array | Thenable<Uint8Array>,
+    uri: (uri:string) => vscode.Uri
+  };
+  
+
+  const  memoryFs = new MemFS();
+  const diskFileSystem : FileSystem = {
+    readFile: (uri) => vscode.workspace.fs.readFile(vscode.Uri.file(uri)),
+    uri: (uri) => vscode.Uri.file(uri)
+  };
+  
+  const memoryFsScheme = 'memfs';
+  function normaliseUri(path:string) : string{
+    return path.replace("C:","").replace(/\\/g,"/");
+  }
+  const  memoryFileSystem = {
+    readFile: (uri:string) =>  memoryFs.readFile( vscode.Uri.parse(`${memoryFsScheme}:${normaliseUri(uri)}`) ),
+    uri: (uri:string) =>     
+      vscode.Uri.parse(`${memoryFsScheme}:${normaliseUri(uri)}`)
+  };
+
+  const editorStateLocation : string =  os.homedir() + "/.cursorless/editor-state.json";
+  
+
+  //Register a memory file provider. This allows vscode to load documents from a memory file system instead of the disk/ssd based one
+  //We need to register the provider so that when we load documents via vs code it uses the correct provider.
+  //Which provider is used is determined by the scheme of the URL.
+
+  context.subscriptions.push(vscode.workspace.registerFileSystemProvider(memoryFsScheme, memoryFs, { isCaseSensitive: true }));
+  makeHomeDirectory(memoryFs, os.homedir()+ "/.cursorless");
+  
   // ================================================================================
   // Applying the the primary/other editor's state
   // ================================================================================
-
+  
   /**
    * Supports reading a "feature flag", which is just a local file with boolean value.
    */
@@ -40,11 +76,35 @@ export async function activate(context: vscode.ExtensionContext) {
    * Reads the state of the primary ("superior") editor and makes VS Code mimic it
    * (current file, selections, scroll area, etc.)
    */
-  async function applyPrimaryEditorState() {
-    const fs = require("fs");
+
+
+  const watcher = vscode.workspace.createFileSystemWatcher(
+    new vscode.RelativePattern(
+      require("os").homedir() + "/.cursorless/",
+      "**/*"
+    )
+  );
+  
+  
+  watcher.onDidChange((uri) => {
+    if (!uri.path.endsWith("vscode-hats.json")){
+        applyPrimaryEditorState(diskFileSystem);
+    }
+  });
+
+  watcher.onDidCreate((uri) => {
+    if (!uri.path.endsWith("vscode-hats.json")){
+        applyPrimaryEditorState(diskFileSystem);
+    }
+  });
+
+  applyPrimaryEditorState(diskFileSystem);
+
+  async function applyPrimaryEditorState(fileSystem: FileSystem) {
     const os = require("os");
     const path = require("path");
 
+    
     const SIDECAR_FEATURE_FLAG_PATH = path.join(
       os.homedir(),
       ".cursorless/sidecar-enabled"
@@ -61,9 +121,9 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // TODO(pcohen): make this generic across editors
     // TODO(pcohen): diff the state against the previous state
-    let state = JSON.parse(
-      fs.readFileSync(os.homedir() + "/.cursorless/editor-state.json")
-    );
+    var chars  = await fileSystem.readFile(editorStateLocation);
+    const data  = Buffer.from(chars).toString('utf8');
+    let state = JSON.parse(data);
     let activeEditorState = state["activeEditor"];
 
     let editor = vscode.window.activeTextEditor;
@@ -94,14 +154,20 @@ export async function activate(context: vscode.ExtensionContext) {
 
       // TODO(pcohen): we need to make this blocking; I believe the commands below
       // run too early when the currently opened file is changed.
-      await commands.executeCommand("vscode.open", Uri.file(destPath));
+      //await commands.executeCommand("vscode.open", Uri.file(destPath));
+      await vscode.window.showTextDocument(fileSystem.uri(destPath));
 
       // Close the other tabs that might have been opened.
       // TODO(pcohen): this seems to always leave one additional tab open.
       await commands.executeCommand("workbench.action.closeOtherEditors");
     }
-
-    commands.executeCommand("revealLine", {
+    await commands.executeCommand("cursorless.setVisibleRange", new vscode.Range(
+      activeEditorState["firstVisibleLine"],
+      0,
+      activeEditorState["lastVisibleLine"],
+      0
+    ));
+    await commands.executeCommand("revealLine", {
       lineNumber: activeEditorState["firstVisibleLine"] - 1,
       at: "top",
     });
@@ -133,22 +199,6 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   }
 
-  const watcher = vscode.workspace.createFileSystemWatcher(
-    new vscode.RelativePattern(
-      require("os").homedir() + "/.cursorless/",
-      "**/*"
-    )
-  );
-
-  watcher.onDidChange((uri) => {
-    applyPrimaryEditorState();
-  });
-
-  watcher.onDidCreate((uri) => {
-    applyPrimaryEditorState();
-  });
-
-  applyPrimaryEditorState();
 
   // ================================================================================
   // Serializing VSCode's state
@@ -249,12 +299,21 @@ export async function activate(context: vscode.ExtensionContext) {
         case "applyPrimaryEditorState":
           // TODO(pcohen): this may change the editor state,
           // but it doesn't actually block on Cursorless applying those changes
-          applyPrimaryEditorState();
+          applyPrimaryEditorState(diskFileSystem);
           return "OK";
+        case "updateEditorState":
+          {
+           
+            await memoryFs.writeFile(memoryFileSystem.uri(editorStateLocation),  Buffer.from(requestObj.state), {create : true, overwrite: true});
+            if (requestObj.newFileContents){
+              await memoryFs.writeFile(memoryFileSystem.uri(requestObj.file),  Buffer.from(requestObj.content), {create : true, overwrite: true});
+            }
+            applyPrimaryEditorState(memoryFileSystem);
+
+          }
         case "command":
           return { result: await runVSCodeCommand(requestObj) };
         case "hats":
-         
           try {
             const commandResult = await vscode.commands.executeCommand("cursorless.getDecorations");
             const editor = vscode.window.activeTextEditor;
@@ -415,7 +474,26 @@ export async function activate(context: vscode.ExtensionContext) {
       document: editor?.document.getText(),
     };
   }
+  
+  function makeHomeDirectory(memoryFs: MemFS, homePath: string) {
+      const normalisedPath =normaliseUri(homePath);
+      var pathParts = normalisedPath.split("/");
+      let fullpath = "";
+      for (let index = 0; index < pathParts.length; index++) {
+        const key = pathParts[index];
+        if (key.length > 0){
+          fullpath =  fullpath + `/${key}`; 
+          const path = memoryFileSystem.uri(fullpath);
+          memoryFs.createDirectory(path);
+        }
+      } 
+  }
+  
 }
+
+
 
 // this method is called when your extension is deactivated
 export function deactivate() {}
+
+
