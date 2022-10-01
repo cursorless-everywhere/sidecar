@@ -5,6 +5,19 @@ export async function activate(context: vscode.ExtensionContext) {
   // NOTE(pcohen): can be used to debug code reloading issues
   // vscode.window.showInformationMessage("Cursorless sidecar started (v10)!");
 
+  const fs = require("fs");
+  const net = require("net");
+  const os = require("os");
+  const path = require("path");
+  const process = require("process");
+
+  // Allowed disabling the sidecar with a flag, so you can actually use other parts of VS Code
+  // when needed.
+  const SIDECAR_FEATURE_FLAG_PATH = path.join(
+    os.homedir(),
+    ".cursorless/sidecar-enabled"
+  );
+
   // ================================================================================
   // Applying the the primary/other editor's state
   // ================================================================================
@@ -13,8 +26,6 @@ export async function activate(context: vscode.ExtensionContext) {
    * Supports reading a "feature flag", which is just a local file with boolean value.
    */
   function readFlagFile(path: string, defaultValue: boolean): boolean {
-    const fs = require("fs");
-
     if (!fs.existsSync(path)) {
       return defaultValue;
     }
@@ -39,17 +50,6 @@ export async function activate(context: vscode.ExtensionContext) {
    * (current file, selections, scroll area, etc.)
    */
   async function applyPrimaryEditorState() {
-    const fs = require("fs");
-    const os = require("os");
-    const path = require("path");
-
-    const SIDECAR_FEATURE_FLAG_PATH = path.join(
-      os.homedir(),
-      ".cursorless/sidecar-enabled"
-    );
-
-    // Allowed disabling the sidecar with a flag, so you can actually use other parts of VS Code
-    // when needed.
     if (!readFlagFile(SIDECAR_FEATURE_FLAG_PATH, true)) {
       console.log(
         `applyPrimaryEditorState: ${SIDECAR_FEATURE_FLAG_PATH} set to false; not synchronizing`
@@ -131,10 +131,7 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   const watcher = vscode.workspace.createFileSystemWatcher(
-    new vscode.RelativePattern(
-      require("os").homedir() + "/.cursorless/",
-      "**/*"
-    )
+    new vscode.RelativePattern(os.homedir() + "/.cursorless/", "**/*")
   );
 
   watcher.onDidChange((uri) => {
@@ -181,7 +178,6 @@ export async function activate(context: vscode.ExtensionContext) {
     };
 
     if (includeEditorContents) {
-      const fs = require("fs");
       // For simplicity will just write to the active path + ".out",
       // assuming the active path is a temporary file.
       const contentsPath = `${result.path}.out`;
@@ -233,12 +229,18 @@ export async function activate(context: vscode.ExtensionContext) {
           // NOTE(pcohen): this need not be Cursorless specific; perhaps a better command name might be
           // along the lines of "execute command and serialize state"
 
-          // NOTE(pcohen): this is wrapped as JSON mostly to simplify stuff on the Kotlin sighed
+          // NOTE(pcohen): this is wrapped as JSON mostly to simplify stuff on the Kotlin side
           const cursorlessArgs = JSON.parse(requestObj.cursorlessArgs);
 
           const oldState = vsCodeState();
 
           try {
+            if (!readFlagFile(SIDECAR_FEATURE_FLAG_PATH, true)) {
+              throw Error(
+                `Sidecar is disabled (${SIDECAR_FEATURE_FLAG_PATH}); not running commands`
+              );
+            }
+
             const commandResult = await vscode.commands.executeCommand(
               "cursorless.command",
               ...cursorlessArgs
@@ -255,7 +257,7 @@ export async function activate(context: vscode.ExtensionContext) {
             };
           }
         case "pid":
-          return `${require("process").pid}`;
+          return `${process.pid}`;
         default:
           return { error: `invalid command: ${requestObj.command}` };
       }
@@ -268,10 +270,6 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   try {
-    const net = require("net");
-    const fs = require("fs");
-    const os = require("os");
-
     const socketPath = os.homedir() + "/.cursorless/vscode-socket";
 
     try {

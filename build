@@ -5,7 +5,6 @@ set -e
 # Remove any previously compiled versions.
 rm *.vsix || true
 
-echo ""
 echo "================================================================================"
 echo "Packaging extension..."
 echo "================================================================================"
