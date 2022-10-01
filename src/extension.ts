@@ -8,6 +8,7 @@ import * as bodyParser from "body-parser";
 
 
 import {MemFS} from "./memoryFSProvider";
+import { Console } from "console";
 
 export async function activate(context: vscode.ExtensionContext) {
 
@@ -149,28 +150,47 @@ export async function activate(context: vscode.ExtensionContext) {
       destPath = activeEditorState["temporaryFilePath"];
     }
 
+    console.log("start visible settings");
+    try{
+        await commands.executeCommand("cursorless.setVisibleRange", { firstVisible: activeEditorState["firstVisibleLine"], lastVisible: activeEditorState["lastVisibleLine"]});
+    }
+    catch (e){
+        console.log("error revealing line", {e});
+    }
+    console.log("write viisble settings");
     if (destPath !== editor?.document.uri.path) {
       // vscode.window.showInformationMessage("Changing paths to " + state["currentPath"]);
 
       // TODO(pcohen): we need to make this blocking; I believe the commands below
       // run too early when the currently opened file is changed.
-      //await commands.executeCommand("vscode.open", Uri.file(destPath));
-      await vscode.window.showTextDocument(fileSystem.uri(destPath));
-
+      //await commands.executeCommand("vscode.open", fileSystem.uri(destPath));
+      console.log("started showing document");
+      try{
+        await vscode.window.showTextDocument(fileSystem.uri(destPath));
+      }
+      catch(e){
+        console.log("Error showing doccument", {e});
+      }
+      
+      console.log("finished showing document");
       // Close the other tabs that might have been opened.
       // TODO(pcohen): this seems to always leave one additional tab open.
-      await commands.executeCommand("workbench.action.closeOtherEditors");
+      console.log("started close other docuemtns");
+      try {
+        await commands.executeCommand("workbench.action.closeOtherEditors");
+      } catch (error) {
+        console.log("closing editorys error", {error});
+      }
+     
+      console.log("finished close other documents");
     }
-    await commands.executeCommand("cursorless.setVisibleRange", new vscode.Range(
-      activeEditorState["firstVisibleLine"],
-      0,
-      activeEditorState["lastVisibleLine"],
-      0
-    ));
-    await commands.executeCommand("revealLine", {
+   
+    console.log("start reveal line");
+    commands.executeCommand("revealLine", {
       lineNumber: activeEditorState["firstVisibleLine"] - 1,
       at: "top",
     });
+    console.log("end reveal line");
 
     if (editor) {
       if (activeEditorState["selections"]) {
@@ -303,13 +323,13 @@ export async function activate(context: vscode.ExtensionContext) {
           return "OK";
         case "updateEditorState":
           {
-           
+            
             await memoryFs.writeFile(memoryFileSystem.uri(editorStateLocation),  Buffer.from(requestObj.state), {create : true, overwrite: true});
             if (requestObj.newFileContents){
               await memoryFs.writeFile(memoryFileSystem.uri(requestObj.file),  Buffer.from(requestObj.content), {create : true, overwrite: true});
             }
             applyPrimaryEditorState(memoryFileSystem);
-
+            return "Ok";
           }
         case "command":
           return { result: await runVSCodeCommand(requestObj) };
@@ -367,6 +387,7 @@ export async function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage(
         `Error during evaluation of command "${requestObj.command}": ${e}`
       );
+      console.log(`Error executing command `,{requestObj},{e});
       return { error: `exception during execution: ${e}` };
     }
   }
