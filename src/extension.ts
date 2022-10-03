@@ -15,7 +15,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // when needed.
   const SIDECAR_FEATURE_FLAG_PATH = path.join(
     os.homedir(),
-    ".cursorless/sidecar-enabled"
+    ".cursorless/sidecar-enabled",
   );
 
   // ================================================================================
@@ -52,7 +52,7 @@ export async function activate(context: vscode.ExtensionContext) {
   async function applyPrimaryEditorState() {
     if (!readFlagFile(SIDECAR_FEATURE_FLAG_PATH, true)) {
       console.log(
-        `applyPrimaryEditorState: ${SIDECAR_FEATURE_FLAG_PATH} set to false; not synchronizing`
+        `applyPrimaryEditorState: ${SIDECAR_FEATURE_FLAG_PATH} set to false; not synchronizing`,
       );
       return;
     }
@@ -60,7 +60,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // TODO(pcohen): make this generic across editors
     // TODO(pcohen): diff the state against the previous state
     let state = JSON.parse(
-      fs.readFileSync(os.homedir() + "/.cursorless/editor-state.json")
+      fs.readFileSync(os.homedir() + "/.cursorless/editor-state.json"),
     );
     let activeEditorState = state["activeEditor"];
 
@@ -111,9 +111,9 @@ export async function activate(context: vscode.ExtensionContext) {
               selection.anchor.line,
               selection.anchor.column,
               selection.active.line,
-              selection.active.column
+              selection.active.column,
             );
-          }
+          },
         );
       } else {
         // TODO(rntz): migrate to |activeEditorState["selections"]|
@@ -123,15 +123,15 @@ export async function activate(context: vscode.ExtensionContext) {
               cursor.line,
               cursor.column,
               cursor.line,
-              cursor.column
-            )
+              cursor.column,
+            ),
         );
       }
     }
   }
 
   const watcher = vscode.workspace.createFileSystemWatcher(
-    new vscode.RelativePattern(os.homedir() + "/.cursorless/", "**/*")
+    new vscode.RelativePattern(os.homedir() + "/.cursorless/", "**/*"),
   );
 
   watcher.onDidChange((uri) => {
@@ -205,7 +205,7 @@ export async function activate(context: vscode.ExtensionContext) {
       const args = requestObj.commandArgs || [];
       const result = await vscode.commands.executeCommand(
         requestObj.commandId,
-        ...args
+        ...args,
       );
       return { result: result };
     }
@@ -237,13 +237,13 @@ export async function activate(context: vscode.ExtensionContext) {
           try {
             if (!readFlagFile(SIDECAR_FEATURE_FLAG_PATH, true)) {
               throw Error(
-                `Sidecar is disabled (${SIDECAR_FEATURE_FLAG_PATH}); not running commands`
+                `Sidecar is disabled (${SIDECAR_FEATURE_FLAG_PATH}); not running commands`,
               );
             }
 
             const commandResult = await vscode.commands.executeCommand(
               "cursorless.command",
-              ...cursorlessArgs
+              ...cursorlessArgs,
             );
             const newState = vsCodeState(true);
             return {
@@ -263,7 +263,7 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     } catch (e) {
       vscode.window.showInformationMessage(
-        `Error during evaluation of command "${requestObj.command}": ${e}`
+        `Error during evaluation of command "${requestObj.command}": ${e}`,
       );
       return { error: `exception during execution: ${e}` };
     }
@@ -296,7 +296,7 @@ export async function activate(context: vscode.ExtensionContext) {
     });
   } catch (e) {
     vscode.window.showInformationMessage(
-      `Error setting up control socket: ${e}`
+      `Error setting up control socket: ${e}`,
     );
   }
 
@@ -310,7 +310,7 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("sidecar.openPath", (path) => {
       commands.executeCommand("vscode.open", Uri.file(path));
-    })
+    }),
   );
 
   //
@@ -323,7 +323,7 @@ export async function activate(context: vscode.ExtensionContext) {
         // TODO(pcohen): multiple selections
         editor.selections = [new vscode.Selection(x, y, z, a)];
       }
-    })
+    }),
   );
 }
 
