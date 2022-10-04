@@ -5,10 +5,20 @@ import * as express from "express";
 import * as fs from "fs";
 import * as os from "os";
 import * as bodyParser from "body-parser";
-
-
 import {MemFS} from "./memoryFSProvider";
-import { Console } from "console";
+
+
+type HatInformation = {
+  hats: any;
+  versionIdentifier: string;
+  hatDocumentName : string;
+};
+
+const defaultHatInformation = {
+  hatDocumentName : "unknown",
+  hats : null,
+  versionIdentifier : "nothing returned"
+};
 
 export async function activate(context: vscode.ExtensionContext) {
 
@@ -17,7 +27,7 @@ export async function activate(context: vscode.ExtensionContext) {
     uri: (uri:string) => vscode.Uri
   };
   
-
+  let lastRequest = {}
   const  memoryFs = new MemFS();
   const diskFileSystem : FileSystem = {
     readFile: (uri) => vscode.workspace.fs.readFile(vscode.Uri.file(uri)),
@@ -40,9 +50,9 @@ export async function activate(context: vscode.ExtensionContext) {
   //Register a memory file provider. This allows vscode to load documents from a memory file system instead of the disk/ssd based one
   //We need to register the provider so that when we load documents via vs code it uses the correct provider.
   //Which provider is used is determined by the scheme of the URL.
-
+  const homedir = os.homedir()+ "/.cursorless";
   context.subscriptions.push(vscode.workspace.registerFileSystemProvider(memoryFsScheme, memoryFs, { isCaseSensitive: true }));
-  makeHomeDirectory(memoryFs, os.homedir()+ "/.cursorless");
+  makeHomeDirectory(memoryFs, homedir);
   
   // ================================================================================
   // Applying the the primary/other editor's state
@@ -78,15 +88,13 @@ export async function activate(context: vscode.ExtensionContext) {
    * (current file, selections, scroll area, etc.)
    */
 
-
   const watcher = vscode.workspace.createFileSystemWatcher(
     new vscode.RelativePattern(
       require("os").homedir() + "/.cursorless/",
       "**/*"
     )
   );
-  
-  
+    
   watcher.onDidChange((uri) => {
     if (!uri.path.endsWith("vscode-hats.json")){
         applyPrimaryEditorState(diskFileSystem);
@@ -101,7 +109,33 @@ export async function activate(context: vscode.ExtensionContext) {
 
   applyPrimaryEditorState(diskFileSystem);
 
-  async function applyPrimaryEditorState(fileSystem: FileSystem) {
+
+  ///Wait for the version guid of the hats to change.
+  ///Even with this mechinism getting stake hats on client need to wait an 
+  ///additional 50ms, need to speak to Pokey, maybe best algorithm would be to 
+  ///see if hats had not changed in xMs then assume no more changes.
+  async function awaitForHatsToChange(originalIdentifier: string, currentDocumentPath:string) : Promise<HatInformation> {
+    const normalizcDocPath = normaliseUri(currentDocumentPath);
+    let totatLoops  = 0;
+    let newHats :  HatInformation[] =  await vscode.commands.executeCommand("cursorless.getDecorations");
+    let newHat = getMatchingDocumentHats(newHats, normalizcDocPath) ??  defaultHatInformation;
+    let count:number = 0;
+    while ((newHat.versionIdentifier === defaultHatInformation.versionIdentifier || originalIdentifier === newHat.versionIdentifier) && count <= 15){
+      totatLoops++;
+      count = newHat.versionIdentifier !==  defaultHatInformation.versionIdentifier ? count +1 : count; //wait for as long required for correct docuement
+      await new Promise(resolve => setTimeout(resolve, 10));
+      newHats = await vscode.commands.executeCommand("cursorless.getDecorations");
+      newHat = getMatchingDocumentHats(newHats, normalizcDocPath) ??  defaultHatInformation;
+    }
+    if (count > 10)
+    {
+      console.log("We waited for a change which never came?");
+    }
+    console.log(`Total loops waiting for the hat was ${totatLoops} original: ${originalIdentifier} current:${newHat.versionIdentifier}`);
+    return newHat;
+  }
+   
+  async function applyPrimaryEditorState(fileSystem: FileSystem) :Promise<string> {
     const os = require("os");
     const path = require("path");
 
@@ -117,7 +151,7 @@ export async function activate(context: vscode.ExtensionContext) {
       console.log(
         `applyPrimaryEditorState: ${SIDECAR_FEATURE_FLAG_PATH} set to false; not synchronizing`
       );
-      return;
+      return "";
     }
 
     // TODO(pcohen): make this generic across editors
@@ -126,96 +160,20 @@ export async function activate(context: vscode.ExtensionContext) {
     const data  = Buffer.from(chars).toString('utf8');
     let state = JSON.parse(data);
     let activeEditorState = state["activeEditor"];
-
-    let editor = vscode.window.activeTextEditor;
-
-    // If we got into a state where the editor has local changes, always revert them. Otherwise all subsequent
-    // commands will fail.
-    //
-    // Note that this shouldn't happen ideally. This can happen if chaining is attempted (need to find
-    // a better synchronization solution).
-    if (editor?.document.isDirty) {
-      vscode.window.showInformationMessage("Editor is dirty; reverting first");
-      await commands.executeCommand("workbench.action.files.revert");
-    }
-
-    let destPath = activeEditorState["path"];
-
-    // TODO(pcohen): forward the language mode from the source editor, rather than just relying on the file extension
-    // (see workbench.action.editor.changeLanguageMode, but also, there is a direct
-    // API for this: vscode.languages.setLanguageId, and a voice command: "change language Python")
-
-    // Prefer the temporary file if it's available
-    if (activeEditorState["temporaryFilePath"]) {
-      destPath = activeEditorState["temporaryFilePath"];
-    }
-
-    console.log("start visible settings");
-    try{
-        await commands.executeCommand("cursorless.setVisibleRange", { firstVisible: activeEditorState["firstVisibleLine"], lastVisible: activeEditorState["lastVisibleLine"]});
-    }
-    catch (e){
-        console.log("error revealing line", {e});
-    }
-    console.log("write viisble settings");
-    if (destPath !== editor?.document.uri.path) {
-      // vscode.window.showInformationMessage("Changing paths to " + state["currentPath"]);
-
-      // TODO(pcohen): we need to make this blocking; I believe the commands below
-      // run too early when the currently opened file is changed.
-      //await commands.executeCommand("vscode.open", fileSystem.uri(destPath));
-      console.log("started showing document");
-      try{
-        await vscode.window.showTextDocument(fileSystem.uri(destPath));
-      }
-      catch(e){
-        console.log("Error showing doccument", {e});
+    
+    try
+    {
+      if (data !== lastRequest)
+      {
+          const originalGuid = await updateSideCarWithNewState(activeEditorState, fileSystem);
+        return originalGuid;
       }
       
-      console.log("finished showing document");
-      // Close the other tabs that might have been opened.
-      // TODO(pcohen): this seems to always leave one additional tab open.
-      console.log("started close other docuemtns");
-      try {
-        await commands.executeCommand("workbench.action.closeOtherEditors");
-      } catch (error) {
-        console.log("closing editorys error", {error});
-      }
-     
-      console.log("finished close other documents");
+      return "No update required";
     }
-   
-    console.log("start reveal line");
-    commands.executeCommand("revealLine", {
-      lineNumber: activeEditorState["firstVisibleLine"] - 1,
-      at: "top",
-    });
-    console.log("end reveal line");
-
-    if (editor) {
-      if (activeEditorState["selections"]) {
-        editor.selections = activeEditorState["selections"].map(
-          (selection: any) => {
-            return new vscode.Selection(
-              selection.anchor.line,
-              selection.anchor.column,
-              selection.active.line,
-              selection.active.column
-            );
-          }
-        );
-      } else {
-        // TODO(rntz): migrate to |activeEditorState["selections"]|
-        editor.selections = activeEditorState["cursors"].map(
-          (cursor: any) =>
-            new vscode.Selection(
-              cursor.line,
-              cursor.column,
-              cursor.line,
-              cursor.column
-            )
-        );
-      }
+    finally
+    {
+      lastRequest = data;
     }
   }
 
@@ -240,6 +198,74 @@ export async function activate(context: vscode.ExtensionContext) {
     path: string | undefined;
     cursors: Cursor[] | undefined;
   };
+
+  async function updateSideCarWithNewState(activeEditorState: any, fileSystem: { readFile: (uri: string) => Uint8Array | Thenable<Uint8Array>; uri: (uri: string) => vscode.Uri; }) {
+    let editor = vscode.window.activeTextEditor;
+
+    // If we got into a state where the editor has local changes, always revert them. Otherwise all subsequent
+    // commands will fail.
+    //
+    // Note that this shouldn't happen ideally. This can happen if chaining is attempted (need to find
+    // a better synchronization solution).
+    if (editor?.document.isDirty) {
+      await commands.executeCommand("workbench.action.files.revert");
+    }
+
+    let destPath = activeEditorState["path"];
+
+    // TODO(pcohen): forward the language mode from the source editor, rather than just relying on the file extension
+    // (see workbench.action.editor.changeLanguageMode, but also, there is a direct
+    // API for this: vscode.languages.setLanguageId, and a voice command: "change language Python")
+    // Prefer the temporary file if it's available
+    if (activeEditorState["temporaryFilePath"]) {
+      destPath = activeEditorState["temporaryFilePath"];
+    }
+
+
+    const origianlhats: HatInformation[] = await vscode.commands.executeCommand("cursorless.getDecorations");
+    const originalGuid = getMatchingDocumentId(origianlhats, destPath);
+    await commands.executeCommand("cursorless.setVisibleRange", { firstVisible: activeEditorState["firstVisibleLine"], lastVisible: activeEditorState["lastVisibleLine"] });
+    if (destPath !== editor?.document.uri.path) {
+      // vscode.window.showInformationMessage("Changing paths to " + state["currentPath"]);
+      // TODO(pcohen): we need to make this blocking; I believe the commands below
+      // run too early when the currently opened file is changed.
+      //await commands.executeCommand("vscode.open", fileSystem.uri(destPath));
+      await vscode.window.showTextDocument(fileSystem.uri(destPath));
+      await commands.executeCommand("workbench.action.closeOtherEditors");
+    }
+
+    await commands.executeCommand("revealLine", {
+      lineNumber: activeEditorState["firstVisibleLine"] - 1,
+      at: "top",
+    });
+
+
+    if (editor) {
+      if (activeEditorState["selections"]) {
+        editor.selections = activeEditorState["selections"].map(
+          (selection: any) => {
+            return new vscode.Selection(
+              selection.anchor.line,
+              selection.anchor.column,
+              selection.active.line,
+              selection.active.column
+            );
+          }
+        );
+      } else {
+        // TODO(rntz): migrate to |activeEditorState["selections"]|
+        editor.selections = activeEditorState["cursors"].map(
+          (cursor: any) => new vscode.Selection(
+            cursor.line,
+            cursor.column,
+            cursor.line,
+            cursor.column
+          )
+        );
+      }
+    }
+    return originalGuid;
+  }
 
   function vsCodeState(includeEditorContents: boolean = false): VsCopdeState {
     const editor = vscode.window.activeTextEditor;
@@ -323,13 +349,24 @@ export async function activate(context: vscode.ExtensionContext) {
           return "OK";
         case "updateEditorState":
           {
-            
+            console.time("memory system stuff");
+            const files = memoryFs.readDirectory(memoryFileSystem.uri(homedir));
+            for (let index = 0; index < files.length; index++) {
+              const element = files[index];
+              memoryFs.delete(memoryFileSystem.uri(`${homedir}/${element[0]}`));
+            }
             await memoryFs.writeFile(memoryFileSystem.uri(editorStateLocation),  Buffer.from(requestObj.state), {create : true, overwrite: true});
             if (requestObj.newFileContents){
               await memoryFs.writeFile(memoryFileSystem.uri(requestObj.file),  Buffer.from(requestObj.content), {create : true, overwrite: true});
             }
-            applyPrimaryEditorState(memoryFileSystem);
-            return "Ok";
+            console.timeEnd("memory system stuff");
+            console.time("state change");
+            const originalGuid =  await applyPrimaryEditorState(memoryFileSystem);
+            console.timeEnd("state change");
+            console.time("waiting for hats");
+            const hats = await awaitForHatsToChange(originalGuid,requestObj.file );
+            console.timeEnd("waiting for hats");
+            return hats;
           }
         case "command":
           return { result: await runVSCodeCommand(requestObj) };
@@ -339,7 +376,7 @@ export async function activate(context: vscode.ExtensionContext) {
             const editor = vscode.window.activeTextEditor;
             return {
               hats: commandResult,
-              cursors:   getCursorDetails(editor)
+              cursors:  getCursorDetails(editor)
             };
           } catch (e) {
             return {
@@ -510,6 +547,18 @@ export async function activate(context: vscode.ExtensionContext) {
       } 
   }
   
+  function getMatchingDocumentId(originalHats: HatInformation[], currentDocumentName: string) : string{
+    const document = getMatchingDocumentHats(originalHats,normaliseUri(currentDocumentName)); 
+    return getDocumentId(document);
+  }
+  
+  function getMatchingDocumentHats(originalHats: HatInformation[], currentDocumentName: string) : HatInformation  | undefined {
+    return  originalHats.find(p => normaliseUri(p.hatDocumentName) === currentDocumentName);
+  }
+  
+  function getDocumentId(document:HatInformation| undefined):string{
+    return document ? document.versionIdentifier : defaultHatInformation.versionIdentifier;
+  }
 }
 
 
@@ -517,4 +566,9 @@ export async function activate(context: vscode.ExtensionContext) {
 // this method is called when your extension is deactivated
 export function deactivate() {}
 
+
+
+
+  
+  
 
