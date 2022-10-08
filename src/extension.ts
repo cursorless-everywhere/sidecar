@@ -131,7 +131,8 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   const watcher = vscode.workspace.createFileSystemWatcher(
-    new vscode.RelativePattern(os.homedir() + "/.cursorless/", "**/*"),
+    // NOTE(pcohen): we only want to watch editor-state.json but for some reason the watcher doesn't take a exact path
+    new vscode.RelativePattern(os.homedir() + "/.cursorless/", "*-state.json"),
   );
 
   watcher.onDidChange((uri) => {
