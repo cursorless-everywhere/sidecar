@@ -1,15 +1,15 @@
 import * as vscode from "vscode";
 import { commands, Uri } from "vscode";
 
+const fs = require("fs");
+const net = require("net");
+const os = require("os");
+const path = require("path");
+const process = require("process");
+
 export async function activate(context: vscode.ExtensionContext) {
   // NOTE(pcohen): can be used to debug code reloading issues
   // vscode.window.showInformationMessage("Cursorless sidecar started (v10)!");
-
-  const fs = require("fs");
-  const net = require("net");
-  const os = require("os");
-  const path = require("path");
-  const process = require("process");
 
   // Allowed disabling the sidecar with a flag, so you can actually use other parts of VS Code
   // when needed.
