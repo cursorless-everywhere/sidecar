@@ -2,9 +2,10 @@ import * as vscode from "vscode";
 
 import { applyPrimaryEditorState, vsCodeState } from "./synchronization";
 import { FEATURE_FLAG_ENABLED, readFlagFile } from "./featureFlags";
-import * as os from "os";
 import * as net from "net";
 import * as fs from "fs";
+import {CURSORLESS_ROOT_DIRECTORY} from "./constants";
+import * as path from "path";
 
 /**
  * Handles a request from the control socket in returns the response.
@@ -84,7 +85,7 @@ async function handleRequest(requestObj: any) {
 
 export function startCommandServer() {
   try {
-    const socketPath = os.homedir() + "/.cursorless/vscode-socket";
+    const socketPath = path.join(CURSORLESS_ROOT_DIRECTORY, "vscode-socket");
 
     try {
       // make sure the file is deleted first.

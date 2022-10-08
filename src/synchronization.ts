@@ -9,6 +9,12 @@ import {
 import * as os from "os";
 import * as fs from "fs";
 import { commands, Uri } from "vscode";
+import { CURSORLESS_ROOT_DIRECTORY } from "./constants";
+import * as path from "path";
+
+// ================================================================================
+// Applying the the primary/other editor's state
+// ================================================================================
 
 /**
  * Reads the state of the primary ("superior") editor and makes VS Code mimic it
@@ -22,10 +28,12 @@ export async function applyPrimaryEditorState() {
     return;
   }
 
-  // TODO(pcohen): make this generic across editors
   // TODO(pcohen): diff the state against the previous state
   let state = JSON.parse(
-    fs.readFileSync(os.homedir() + "/.cursorless/editor-state.json", "utf8"),
+    fs.readFileSync(
+      path.join(CURSORLESS_ROOT_DIRECTORY, "editor-state.json"),
+      "utf8",
+    ),
   );
   let activeEditorState = state["activeEditor"];
 
@@ -97,23 +105,6 @@ export async function applyPrimaryEditorState() {
   }
 }
 
-export function registerFileWatchers() {
-  const watcher = vscode.workspace.createFileSystemWatcher(
-    // NOTE(pcohen): we only want to watch editor-state.json but for some reason the watcher doesn't take a exact path
-    new vscode.RelativePattern(os.homedir() + "/.cursorless/", "*-state.json"),
-  );
-
-  watcher.onDidChange((uri) => {
-    applyPrimaryEditorState();
-  });
-
-  watcher.onDidCreate((uri) => {
-    applyPrimaryEditorState();
-  });
-
-  applyPrimaryEditorState();
-}
-
 // ================================================================================
 // Serializing VSCode's state
 // ================================================================================
@@ -160,4 +151,24 @@ export function vsCodeState(includeEditorContents: boolean = false) {
   }
 
   return result;
+}
+
+/**
+ * Registers file watchers so that when the exterior editor changes it state, we update VS Code.
+ */
+export function registerFileWatchers() {
+  const watcher = vscode.workspace.createFileSystemWatcher(
+    // NOTE(pcohen): we only want to watch editor-state.json but for some reason the watcher doesn't take a exact path
+    new vscode.RelativePattern(CURSORLESS_ROOT_DIRECTORY, "*-state.json"),
+  );
+
+  watcher.onDidChange((uri) => {
+    applyPrimaryEditorState();
+  });
+
+  watcher.onDidCreate((uri) => {
+    applyPrimaryEditorState();
+  });
+
+  applyPrimaryEditorState();
 }
