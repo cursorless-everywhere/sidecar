@@ -1,14 +1,12 @@
 import * as vscode from "vscode";
+import { commands, Uri } from "vscode";
 
 import {
   FEATURE_FLAG_ENABLED,
   FEATURE_FLAG_PERFORM_SCROLLING,
   readFlagFile,
 } from "./featureFlags";
-
-import * as os from "os";
 import * as fs from "fs";
-import { commands, Uri } from "vscode";
 import { CURSORLESS_ROOT_DIRECTORY } from "./constants";
 import * as path from "path";
 
