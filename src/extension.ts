@@ -9,32 +9,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
   startCommandServer();
   registerFileWatchers();
-
-  // ================================================================================
-  // Extra commands (for debugging purposes)
-  // ================================================================================
-
-  //
-  // Opening file by path
-  //
-  context.subscriptions.push(
-    vscode.commands.registerCommand("sidecar.openPath", (path) => {
-      commands.executeCommand("vscode.open", Uri.file(path));
-    }),
-  );
-
-  //
-  // Setting the cursor position(s)
-  //
-  context.subscriptions.push(
-    vscode.commands.registerCommand("sidecar.setCursor", (x, y, z, a) => {
-      let editor = vscode.window.activeTextEditor;
-      if (editor) {
-        // TODO(pcohen): multiple selections
-        editor.selections = [new vscode.Selection(x, y, z, a)];
-      }
-    }),
-  );
 }
 
 // this method is called when your extension is deactivated
