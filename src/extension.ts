@@ -7,15 +7,25 @@ const os = require("os");
 const path = require("path");
 const process = require("process");
 
+const CURSORLESS_ROOT_DIRECTORY = path.join(os.homedir(), ".cursorless");
+
 export async function activate(context: vscode.ExtensionContext) {
   // NOTE(pcohen): can be used to debug code reloading issues
   // vscode.window.showInformationMessage("Cursorless sidecar started (v10)!");
 
   // Allowed disabling the sidecar with a flag, so you can actually use other parts of VS Code
   // when needed.
-  const SIDECAR_FEATURE_FLAG_PATH = path.join(
-    os.homedir(),
-    ".cursorless/sidecar-enabled",
+  const FEATURE_FLAG_ENABLED = path.join(
+    CURSORLESS_ROOT_DIRECTORY,
+    "sidecar-enabled",
+  );
+
+  // Allowed disabling the scrolling of the sidecar. Recent versions of Cursorless Everywhere
+  // use visible ranges passed directly from the exterior editor, so scrolling is not necessary,
+  // but it can be enabled for ease of debugging.
+  const FEATURE_FLAG_PERFORM_SCROLLING = path.join(
+    CURSORLESS_ROOT_DIRECTORY,
+    "sidecar-scrolling",
   );
 
   // ================================================================================
@@ -26,6 +36,7 @@ export async function activate(context: vscode.ExtensionContext) {
    * Supports reading a "feature flag", which is just a local file with boolean value.
    */
   function readFlagFile(path: string, defaultValue: boolean): boolean {
+    // TODO(pcohen): don't read these from disk every time; use a file watcher
     if (!fs.existsSync(path)) {
       return defaultValue;
     }
@@ -50,9 +61,9 @@ export async function activate(context: vscode.ExtensionContext) {
    * (current file, selections, scroll area, etc.)
    */
   async function applyPrimaryEditorState() {
-    if (!readFlagFile(SIDECAR_FEATURE_FLAG_PATH, true)) {
+    if (!readFlagFile(FEATURE_FLAG_ENABLED, true)) {
       console.log(
-        `applyPrimaryEditorState: ${SIDECAR_FEATURE_FLAG_PATH} set to false; not synchronizing`,
+        `applyPrimaryEditorState: ${FEATURE_FLAG_ENABLED} set to false; not synchronizing`,
       );
       return;
     }
@@ -98,10 +109,12 @@ export async function activate(context: vscode.ExtensionContext) {
       await commands.executeCommand("workbench.action.closeOtherEditors");
     }
 
-    commands.executeCommand("revealLine", {
-      lineNumber: activeEditorState["firstVisibleLine"] - 1,
-      at: "top",
-    });
+    if (readFlagFile(FEATURE_FLAG_PERFORM_SCROLLING, true)) {
+      commands.executeCommand("revealLine", {
+        lineNumber: activeEditorState["firstVisibleLine"] - 1,
+        at: "top",
+      });
+    }
 
     if (editor) {
       if (activeEditorState["selections"]) {
@@ -236,9 +249,9 @@ export async function activate(context: vscode.ExtensionContext) {
           const oldState = vsCodeState();
 
           try {
-            if (!readFlagFile(SIDECAR_FEATURE_FLAG_PATH, true)) {
+            if (!readFlagFile(FEATURE_FLAG_ENABLED, true)) {
               throw Error(
-                `Sidecar is disabled (${SIDECAR_FEATURE_FLAG_PATH}); not running commands`,
+                `Sidecar is disabled (${FEATURE_FLAG_ENABLED}); not running commands`,
               );
             }
 
