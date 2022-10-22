@@ -1,15 +1,8 @@
 import * as vscode from "vscode";
-import { commands, Uri } from "vscode";
-import { registerFileWatchers } from "./synchronization";
-import { startCommandServer } from "./commandServer";
 
 export async function activate(context: vscode.ExtensionContext) {
   // NOTE(pcohen): can be used to debug code reloading issues
-  // vscode.window.showInformationMessage("Cursorless sidecar started (v10)!");
-
-  registerFileWatchers();
-  // NOTE(pcohen): this won't behave well if another instance of Code is already serving the socket
-  startCommandServer();
+  vscode.window.showErrorMessage("The cursorless sidecar has been deprecated as a separate extension for now; please uninstall it, and install the latest Cursorless (everywhere fork) instead");
 }
 
 // this method is called when your extension is deactivated
